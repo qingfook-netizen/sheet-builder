@@ -5,7 +5,7 @@
            xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
            xsi:type="TaskPaneApp">
   <Id>e4b34fa8-9117-4237-bd63-ee8c6ed68e83</Id>
-  <Version>1.0.0.0</Version>
+  <Version>1.1.0.0</Version>
   <ProviderName>Zane Lau</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="Sheet Builder"/>
@@ -66,6 +66,21 @@
                     <FunctionName>buildFromImage</FunctionName>
                   </Action>
                 </Control>
+                <Control xsi:type="Button" id="SB.Rebuild">
+                  <Label resid="Rebuild.Label"/>
+                  <Supertip>
+                    <Title resid="Rebuild.Label"/>
+                    <Description resid="Rebuild.Tip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16"/>
+                    <bt:Image size="32" resid="Icon.32"/>
+                    <bt:Image size="80" resid="Icon.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>rebuildFromBank</FunctionName>
+                  </Action>
+                </Control>
                 <Control xsi:type="Button" id="SB.Settings">
                   <Label resid="Settings.Label"/>
                   <Supertip>
@@ -103,10 +118,12 @@
         <bt:String id="Group.Label" DefaultValue="Sheet Builder"/>
         <bt:String id="Build.Label" DefaultValue="Build from Screenshot"/>
         <bt:String id="Settings.Label" DefaultValue="Settings"/>
+        <bt:String id="Rebuild.Label" DefaultValue="Rebuild from Bank"/>
         <bt:String id="GetStarted.Title" DefaultValue="Sheet Builder is ready"/>
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="Build.Tip" DefaultValue="Paste a screenshot of instructions into the sheet, then click (or press Cmd+Option+B). Claude builds a new sheet with live formulas."/>
+        <bt:String id="Rebuild.Tip" DefaultValue="Build again from the Instruction Bank sheet: your corrections, answers to open questions, and anything you pasted there."/>
         <bt:String id="Settings.Tip" DefaultValue="OpenRouter key, model and standing notes."/>
         <bt:String id="GetStarted.Description" DefaultValue="Open the Sheet Builder tab. Paste a screenshot, then Build from Screenshot."/>
       </bt:LongStrings>

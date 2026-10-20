@@ -1,4 +1,4 @@
-/* global Office, Excel, SB_PROMPT, writeSpec */
+/* global Office, Excel, SB_PROMPT, writeSpec, readBank, writeBank, SB_BANK */
 // Runs invisibly behind the ribbon buttons and the keyboard shortcut. No task pane.
 
 const DEFAULTS = { apiKey: "", model: "anthropic/claude-opus-5.5", standing: "" };
@@ -54,7 +54,7 @@ async function addPlaceholder() {
     while (names.has(name.toLowerCase())) name = "Building " + i++;
     const ws = sheets.add(name);
     ws.load("id");
-    ws.getRange("A1").values = [["Building from screenshot… (sending)"]];
+    ws.getRange("A1").values = [["Starting…"]];
     ws.getRange("A1").format.font.color = "#595959";
     await ctx.sync();
     return ws.id;
@@ -66,18 +66,26 @@ const status = (sheetId, text) => Excel.run(async (ctx) => {
   await ctx.sync();
 }).catch(() => {});
 
-async function callModel(base64, onProgress) {
+async function callModel({ pic, bank, rebuild }, onProgress) {
   const o = getSettings();
   if (!o.apiKey) throw new Error("No API key yet. Click Settings on the Sheet Builder tab and paste your OpenRouter key.");
+  const intro = rebuild
+    ? "Rebuild the workbook from the INSTRUCTION BANK below. The user may have corrected the transcribed instructions, answered your open questions in column B, or added notes, data or screenshots. Their input overrides earlier assumptions."
+    : "Build the workbook these instructions describe (screenshot attached).";
+  const content = [{ type: "text", text: intro +
+    (o.standing ? "\n\nStanding notes: " + o.standing : "") +
+    (bank && bank.text ? "\n\nINSTRUCTION BANK (a sheet in the user's workbook; cell: content):\n" + bank.text : "") }];
+  if (pic) {
+    content.push({ type: "text", text: "Screenshot to build from:" });
+    content.push({ type: "image_url", image_url: { url: "data:image/png;base64," + pic.base64 } });
+  }
+  (bank?.images || []).forEach((b64, i) => {
+    content.push({ type: "text", text: `Instruction Bank image ${i + 1} (an earlier screenshot or one the user added):` });
+    content.push({ type: "image_url", image_url: { url: "data:image/png;base64," + b64 } });
+  });
   const body = {
-    model: o.model || DEFAULTS.model, stream: true, max_tokens: 16000,
-    messages: [
-      { role: "system", content: SB_PROMPT },
-      { role: "user", content: [
-        { type: "text", text: "Build the workbook these instructions describe." + (o.standing ? "\n\nStanding notes: " + o.standing : "") },
-        { type: "image_url", image_url: { url: "data:image/png;base64," + base64 } }
-      ] }
-    ]
+    model: o.model || DEFAULTS.model, stream: true, max_tokens: 32000,
+    messages: [{ role: "system", content: SB_PROMPT }, { role: "user", content }]
   };
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -106,31 +114,41 @@ async function callModel(base64, onProgress) {
   return out;
 }
 
-async function buildFromImage(event) {
-  event?.completed?.();          // release the ribbon button; the work carries on in this runtime
+async function run({ rebuild }) {
   if (busy) return;
   busy = true;
   let sheetId = null;
   try {
-    const pic = await grabPicture();
-    if (!pic) {
-      popup("No picture on this sheet. Take a screenshot to the clipboard (Cmd+Ctrl+Shift+4), paste it into the sheet with Cmd+V, then run Build again.");
+    const pic = rebuild ? null : await grabPicture();
+    const bank = await Excel.run((ctx) => readBank(ctx, rebuild ? 6 : 4)).catch(() => null);
+    if (!rebuild && !pic) {
+      popup("No picture on this sheet. Take a screenshot to the clipboard (Cmd+Ctrl+Shift+4), paste it into the sheet with Cmd+V, then run Build again." +
+        (bank ? "\n\nTo build again from the Instruction Bank instead, click Rebuild from Bank." : ""));
       return;
     }
+    if (rebuild && !bank) { popup("There's no Instruction Bank sheet in this workbook yet. Build from a screenshot first."); return; }
     sheetId = await addPlaceholder();
-    const reply = await callModel(pic.base64, (n) => status(sheetId, `Building from screenshot… ${n.toLocaleString()} characters received`));
-    await status(sheetId, "Writing the sheet…");
+    const what = rebuild ? "Rebuilding from the Instruction Bank…" : "Building from screenshot…";
+    await status(sheetId, what + " (sending)");
+    const reply = await callModel({ pic, bank, rebuild }, (n) => status(sheetId, `${what} ${n.toLocaleString()} characters received`));
+    await status(sheetId, "Writing the sheets…");
     const spec = parseSpec(reply);
-    await Excel.run((ctx) => writeSpec(ctx, spec, sheetId));
-    // remove the pasted screenshot now that it's been used
-    await Excel.run(async (ctx) => { ctx.workbook.worksheets.getItem(pic.sheetId).shapes.getItem(pic.shapeId).delete(); await ctx.sync(); }).catch(() => {});
+    const res = await Excel.run((ctx) => writeSpec(ctx, spec, sheetId));
+    const when = new Date().toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    const label = `${rebuild ? "Rebuild" : "Build"} · ${when} · ${[res.answers, ...res.sheets, ...(res.trees || [])].filter(Boolean).join(", ")}`;
+    await Excel.run((ctx) => writeBank(ctx, spec, pic && pic.base64, label));
+    // the screenshot now lives in the Instruction Bank; remove the pasted copy
+    if (pic) await Excel.run(async (ctx) => { ctx.workbook.worksheets.getItem(pic.sheetId).shapes.getItem(pic.shapeId).delete(); await ctx.sync(); }).catch(() => {});
   } catch (e) {
-    if (sheetId) await status(sheetId, "Error: " + e.message + "  (your screenshot is still on the original sheet; delete this sheet and try again)");
+    if (sheetId) await status(sheetId, "Error: " + e.message + "  (nothing was removed; delete this sheet and try again)");
     else popup("Error: " + e.message);
   } finally {
     busy = false;
   }
 }
+
+function buildFromImage(event) { event?.completed?.(); return run({ rebuild: false }); }
+function rebuildFromBank(event) { event?.completed?.(); return run({ rebuild: true }); }
 
 function openSettings(event) {
   event?.completed?.();
@@ -146,5 +164,6 @@ function openSettings(event) {
 
 Office.onReady(() => {
   Office.actions.associate("buildFromImage", buildFromImage);
+  Office.actions.associate("rebuildFromBank", rebuildFromBank);
   Office.actions.associate("openSettings", openSettings);
 });

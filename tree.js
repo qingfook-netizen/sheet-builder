@@ -1,6 +1,6 @@
 // Draws a decision tree on its own sheet: rectangles = decisions, ellipses = chance nodes, arrows = branches.
 // EMVs, probabilities and payoffs are live formulas in cells next to the shapes, linked to the calc sheet.
-/* global sbwFixRefs, sbwSheetName */
+/* global sbwFixRefs, sbwSheetName, sbwNum */
 
 const SBT = { leafGap: 4, firstRow: 6, nodeW: 76, nodeH: 42, nodeCol: 84, gapCol: 54, maxLeaves: 48, maxDepth: 8 };
 
@@ -42,7 +42,7 @@ async function drawTree(context, tree, map, used) {
   const sheetName = sbwSheetName(tree.sheet || "Decision Tree", used);
   const ws = context.workbook.worksheets.add(sheetName);
   const { nodes, lastRow, maxDepth } = sbtLayout(tree.root);
-  const fmtV = String(tree.numFmt || "#,##0.##");
+  const fmtV = tree.numFmt ? String(tree.numFmt) : null;
 
   // grid: fixed column widths so shapes line up with the label cells
   ws.getRange("A:A").format.columnWidth = 14;
@@ -74,10 +74,10 @@ async function drawTree(context, tree, map, used) {
     const val = sbtExpr(x.n.value, map);
     if (x.leaf) {
       const label = x.n.label ? x.n.label + " = " : "";
-      if (val) put(x.row, c, `=${sbtStr(label)}&TEXT(${val},${sbtStr(fmtV)})`, { bold: true });
+      if (val) put(x.row, c, `=${sbtStr(label)}&${sbwNum(val, fmtV)}`, { bold: true });
       else put(x.row, c, null, { text: x.n.label || "" , bold: true });
     } else if (val) {
-      put(x.row - 2, c, `=${sbtStr("EMV ")}&TEXT(${val},${sbtStr(fmtV)})`, { bold: true, center: true });
+      put(x.row - 2, c, `=${sbtStr("EMV ")}&${sbwNum(val, fmtV)}`, { bold: true, center: true });
     }
     if (x.branch) {
       const p = sbtExpr(x.branch.prob, map);

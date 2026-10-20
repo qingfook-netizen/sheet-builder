@@ -6,7 +6,8 @@ const SBW_PRESETS = {
   header: { bold: true, fill: "#D9E1F2", border: "bottom", wrap: true },
   input:  { fontColor: "#0000FF", fill: "#FFF2CC" },     // blue on yellow = cells you change
   total:  { bold: true, border: "top" },
-  note:   { italic: true, fontColor: "#595959", wrap: true }
+  note:   { italic: true, fontColor: "#595959", wrap: true },
+  key:    { bold: true, fill: "#C6EFCE", fontColor: "#006100", border: "all" }   // cell that produces an answer
 };
 const SBW_CHART_TYPES = {
   column: "ColumnClustered", stackedcolumn: "ColumnStacked", bar: "BarClustered", stackedbar: "BarStacked",
@@ -17,6 +18,33 @@ const SBW_RANGE = /^\$?[A-Z]{1,3}\$?[1-9]\d{0,6}:\$?[A-Z]{1,3}\$?[1-9]\d{0,6}$/;
 
 const sbwColNum = (L) => L.split("").reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
 const sbwColLetter = (n) => { let s = ""; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
+// number shown as text: given format, or whole numbers plain and decimals up to 4 places; text passes through
+function sbwNum(e, fmt) {
+  const q = (x) => '"' + String(x).replace(/"/g, '""') + '"';
+  const f = fmt ? q(fmt) : `IF(${e}=INT(${e}),"#,##0","#,##0.####")`;
+  return `IF(ISNUMBER(${e}),TEXT(${e},${f}),${e}&"")`;
+}
+
+// set formulas in one go; if Excel rejects one, retry one by one and leave the bad ones as red text
+async function sbwSetFormulas(context, items) {
+  const bad = [];
+  if (!items.length) return bad;
+  for (const x of items) x.range().formulas = [[x.f]];
+  try { await context.sync(); return bad; }
+  catch {
+    for (const x of items) {
+      try { x.range().formulas = [[x.f]]; await context.sync(); }
+      catch {
+        const r = x.range();
+        r.numberFormat = [["@"]]; r.values = [[x.text != null ? x.text : x.f]]; r.format.font.color = "#C00000";
+        await context.sync();
+        bad.push((x.label || "") + x.f);
+      }
+    }
+  }
+  return bad;
+}
+
 const sbwHex = (h) => { const s = String(h || "").trim(); return /^#?[0-9a-fA-F]{6}$/.test(s) ? "#" + s.replace(/^#/, "").toUpperCase() : null; };
 
 function sbwSheetName(name, used) {
@@ -58,8 +86,9 @@ function sbwStyle(range, c) {
 async function writeSpec(context, spec, placeholderId) {
   if (!spec || !Array.isArray(spec.sheets) || !spec.sheets.length) throw new Error("The model returned no sheets.");
   const sheets = context.workbook.worksheets;
-  sheets.load("items/name,items/id");
+  sheets.load("items/name,items/id,items/position");
   await context.sync();
+  const phPos = placeholderId ? (sheets.items.find((x) => x.id === placeholderId) || {}).position : null;
   const used = new Set(sheets.items.filter((s) => s.id !== placeholderId).map((s) => s.name.toLowerCase()));
 
   // 1) create / rename sheets
@@ -111,22 +140,7 @@ async function writeSpec(context, spec, placeholderId) {
   await context.sync();
 
   // 3) formulas: all at once; if Excel rejects one, retry one by one and keep the bad ones as text
-  const bad = [];
-  if (formulas.length) {
-    for (const x of formulas) x.ws.getRange(x.ref).formulas = [[x.f]];
-    try { await context.sync(); }
-    catch {
-      for (const x of formulas) {
-        try { x.ws.getRange(x.ref).formulas = [[x.f]]; await context.sync(); }
-        catch {
-          const r = x.ws.getRange(x.ref);
-          r.numberFormat = [["@"]]; r.values = [[x.f]]; r.format.font.color = "#C00000";
-          await context.sync();
-          bad.push(x.ref + ": " + x.f);
-        }
-      }
-    }
-  }
+  const bad = await sbwSetFormulas(context, formulas.map((x) => ({ range: () => x.ws.getRange(x.ref), f: x.f, label: x.ref + ": " })));
 
   // 4) charts, each on its own so one bad chart doesn't stop the rest
   const chartFails = [];
@@ -172,7 +186,16 @@ async function writeSpec(context, spec, placeholderId) {
     } catch (e) { treeFails.push(`Decision tree "${t && t.title || ""}" could not be drawn (${e.message})`); }
   }
 
-  // 6) notes under the first sheet's content
+  // 6) answers sheet, placed in front of the model sheets
+  let answersSheet = null;
+  if (Array.isArray(spec.answers) && spec.answers.length) {
+    try {
+      const a = await writeAnswers(context, spec.answers, map, used, phPos);
+      answersSheet = a.name; treeFails.push(...a.fails);
+    } catch (e) { treeFails.push("Answers sheet could not be written (" + e.message + ")"); }
+  }
+
+  // 7) notes under the first sheet's content
   const notes = [
     ...(spec.missing || []).map((t) => "Missing input: " + t),
     ...(spec.assumptions || []).map((t) => "Assumption: " + t),
@@ -193,11 +216,12 @@ async function writeSpec(context, spec, placeholderId) {
   }
   // stay on whatever sheet you're on; the new sheets just appear in the tab bar
   await context.sync();
-  return { sheets: made.map((x) => x.name), notes, bad, skipped, charts: chartCount, trees: treeSheets };
+  return { sheets: made.map((x) => x.name), notes, bad, skipped, charts: chartCount, trees: treeSheets, answers: answersSheet };
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { writeSpec, sbwFixRefs, sbwSheetName };
-  Object.assign(globalThis, { sbwFixRefs, sbwSheetName });
+  module.exports = { writeSpec, sbwFixRefs, sbwSheetName, sbwNum };
+  Object.assign(globalThis, { sbwFixRefs, sbwSheetName, sbwNum, sbwSetFormulas, sbwColLetter });
   globalThis.drawTree = (...a) => require("./tree.js").drawTree(...a);
+  globalThis.writeAnswers = (...a) => require("./answers.js").writeAnswers(...a);
 }
