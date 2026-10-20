@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+           xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
+           xsi:type="TaskPaneApp">
+  <Id>e4b34fa8-9117-4237-bd63-ee8c6ed68e83</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>Zane Lau</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="Sheet Builder"/>
+  <Description DefaultValue="Paste a screenshot of instructions; Claude builds the sheet with live formulas."/>
+  <IconUrl DefaultValue="https://qingfook-netizen.github.io/sheet-builder/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://qingfook-netizen.github.io/sheet-builder/icon-64.png"/>
+  <SupportUrl DefaultValue="https://qingfook-netizen.github.io/sheet-builder/help.html"/>
+  <AppDomains>
+    <AppDomain>https://openrouter.ai</AppDomain>
+  </AppDomains>
+  <Hosts>
+    <Host Name="Workbook"/>
+  </Hosts>
+  <Requirements>
+    <Sets DefaultMinVersion="1.1">
+      <Set Name="SharedRuntime" MinVersion="1.1"/>
+      <Set Name="ExcelApi" MinVersion="1.10"/>
+    </Sets>
+  </Requirements>
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://qingfook-netizen.github.io/sheet-builder/runtime.html"/>
+  </DefaultSettings>
+  <Permissions>ReadWriteDocument</Permissions>
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Workbook">
+        <Runtimes>
+          <Runtime resid="Runtime.Url" lifetime="long"/>
+        </Runtimes>
+        <DesktopFormFactor>
+          <GetStarted>
+            <Title resid="GetStarted.Title"/>
+            <Description resid="GetStarted.Description"/>
+            <LearnMoreUrl resid="Help.Url"/>
+          </GetStarted>
+          <FunctionFile resid="Runtime.Url"/>
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <CustomTab id="SB.Tab">
+              <Group id="SB.Group">
+                <Label resid="Group.Label"/>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16"/>
+                  <bt:Image size="32" resid="Icon.32"/>
+                  <bt:Image size="80" resid="Icon.80"/>
+                </Icon>
+                <Control xsi:type="Button" id="SB.Build">
+                  <Label resid="Build.Label"/>
+                  <Supertip>
+                    <Title resid="Build.Label"/>
+                    <Description resid="Build.Tip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16"/>
+                    <bt:Image size="32" resid="Icon.32"/>
+                    <bt:Image size="80" resid="Icon.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>buildFromImage</FunctionName>
+                  </Action>
+                </Control>
+                <Control xsi:type="Button" id="SB.Settings">
+                  <Label resid="Settings.Label"/>
+                  <Supertip>
+                    <Title resid="Settings.Label"/>
+                    <Description resid="Settings.Tip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16"/>
+                    <bt:Image size="32" resid="Icon.32"/>
+                    <bt:Image size="80" resid="Icon.80"/>
+                  </Icon>
+                  <Action xsi:type="ExecuteFunction">
+                    <FunctionName>openSettings</FunctionName>
+                  </Action>
+                </Control>
+              </Group>
+              <Label resid="Tab.Label"/>
+            </CustomTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon.16" DefaultValue="https://qingfook-netizen.github.io/sheet-builder/icon-16.png"/>
+        <bt:Image id="Icon.32" DefaultValue="https://qingfook-netizen.github.io/sheet-builder/icon-32.png"/>
+        <bt:Image id="Icon.80" DefaultValue="https://qingfook-netizen.github.io/sheet-builder/icon-80.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="Runtime.Url" DefaultValue="https://qingfook-netizen.github.io/sheet-builder/runtime.html"/>
+        <bt:Url id="Help.Url" DefaultValue="https://qingfook-netizen.github.io/sheet-builder/help.html"/>
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="Tab.Label" DefaultValue="Sheet Builder"/>
+        <bt:String id="Group.Label" DefaultValue="Sheet Builder"/>
+        <bt:String id="Build.Label" DefaultValue="Build from Screenshot"/>
+        <bt:String id="Settings.Label" DefaultValue="Settings"/>
+        <bt:String id="GetStarted.Title" DefaultValue="Sheet Builder is ready"/>
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="Build.Tip" DefaultValue="Paste a screenshot of instructions into the sheet, then click (or press Cmd+Option+B). Claude builds a new sheet with live formulas."/>
+        <bt:String id="Settings.Tip" DefaultValue="OpenRouter key, model and standing notes."/>
+        <bt:String id="GetStarted.Description" DefaultValue="Open the Sheet Builder tab. Paste a screenshot, then Build from Screenshot."/>
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+  <ExtendedOverrides Url="https://qingfook-netizen.github.io/sheet-builder/shortcuts.json"/>
+</OfficeApp>

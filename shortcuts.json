@@ -1,0 +1,8 @@
+{
+  "actions": [
+    { "id": "buildFromImage", "type": "ExecuteFunction", "name": "Build sheet from screenshot" }
+  ],
+  "shortcuts": [
+    { "action": "buildFromImage", "key": { "default": "Ctrl+Alt+B", "mac": "Command+Option+B" } }
+  ]
+}
