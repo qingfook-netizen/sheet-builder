@@ -16,6 +16,10 @@ Reply with ONLY one JSON object, no prose and no code fences, in this shape:
         { "ref": "B4", "value": 1200, "style": "input", "numFmt": "#,##0" },
         { "ref": "B6", "formula": "=B4*B5", "numFmt": "#,##0.00", "style": "total" },
         { "ref": "C4", "value": "Yes", "list": ["Yes", "No"] }
+      ],
+      "charts": [
+        { "type": "line", "title": "Cash flow by year", "range": "A10:C20", "seriesBy": "columns",
+          "anchor": "F3", "xTitle": "Year", "yTitle": "RM" }
       ]
     }
   ],
@@ -26,6 +30,17 @@ Reply with ONLY one JSON object, no prose and no code fences, in this shape:
 Cell fields: ref (A1 style, required); value (string, number or boolean) OR formula (Excel formula starting with =);
 optional style: "title" | "header" | "input" | "total" | "note"; optional numFmt, bold, italic, fill ("#RRGGBB"),
 fontColor ("#RRGGBB"), align ("left" | "center" | "right"), wrap (true/false), border ("all" | "top" | "bottom"), list (dropdown options).
+
+Chart fields: type ("column" | "stackedColumn" | "bar" | "stackedBar" | "line" | "pie" | "doughnut" | "scatter" | "area" | "stackedArea");
+range (one contiguous block: the header row/column plus the data, with the category labels in the first column or row);
+seriesBy ("columns" | "rows"); anchor (top-left cell for the chart); optional title, xTitle, yTitle, dataSheet (sheet holding the range if not this one), width/height in points (default 480 x 288).
+
+Charts:
+- Always add the charts the instructions ask for, with the type they name.
+- Otherwise add a chart only where it helps read a result: a trend over time (line), a comparison across categories or scenarios (column/bar), composition of a total (pie/doughnut, max ~6 slices, or stacked column), a relationship between two variables (scatter), or a sensitivity table. No charts for single figures, input lists or short tables of unrelated items.
+- At most 3 charts per sheet unless the instructions ask for more.
+- Chart ranges point at the formula cells, so charts update with the inputs. Labels are text, values numeric.
+- Place each chart beside the data, starting two columns right of the last used column, never on top of cells you filled; stack multiple charts vertically about 16 rows apart.
 
 Rules:
 - Follow the layout, labels, order and terminology in the screenshot exactly. If it names specific cells, sheets or column headings, use those.

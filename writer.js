@@ -8,7 +8,11 @@ const SBW_PRESETS = {
   total:  { bold: true, border: "top" },
   note:   { italic: true, fontColor: "#595959", wrap: true }
 };
-const SBW_REF = /^\$?([A-Z]{1,3})\$?([1-9]\d{0,6})$/;
+const SBW_CHART_TYPES = {
+  column: "ColumnClustered", stackedcolumn: "ColumnStacked", bar: "BarClustered", stackedbar: "BarStacked",
+  line: "LineMarkers", pie: "Pie", doughnut: "Doughnut", scatter: "XYScatter", area: "Area", stackedarea: "AreaStacked"
+};
+const SBW_REF =/^\$?([A-Z]{1,3})\$?([1-9]\d{0,6})$/;
 const SBW_RANGE = /^\$?[A-Z]{1,3}\$?[1-9]\d{0,6}:\$?[A-Z]{1,3}\$?[1-9]\d{0,6}$/;
 
 const sbwColNum = (L) => L.split("").reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
@@ -124,11 +128,46 @@ async function writeSpec(context, spec, placeholderId) {
     }
   }
 
-  // 4) notes under the first sheet's content
+  // 4) charts, each on its own so one bad chart doesn't stop the rest
+  const chartFails = [];
+  let chartCount = 0;
+  for (const { ws, name, s } of made) {
+    for (const ch of (s.charts || []).slice(0, 6)) {
+      const type = SBW_CHART_TYPES[String(ch.type || "").toLowerCase()] || "ColumnClustered";
+      const rng = String(ch.range || "").toUpperCase();
+      if (!SBW_RANGE.test(rng)) { chartFails.push(`${name}: chart "${ch.title || ch.type}" has an invalid range`); continue; }
+      try {
+        let src = ws;
+        if (ch.dataSheet) {
+          const dn = map.get(String(ch.dataSheet).toLowerCase()) || made.find((m) => m.s.name === ch.dataSheet)?.name || ch.dataSheet;
+          src = sheets.getItem(dn);
+        }
+        const sb = String(ch.seriesBy || "").toLowerCase();
+        const chart = ws.charts.add(type, src.getRange(rng), sb === "rows" ? "Rows" : sb === "columns" ? "Columns" : "Auto");
+        if (ch.title) chart.title.text = String(ch.title);
+        const anchor = SBW_REF.exec(String(ch.anchor || "").toUpperCase());
+        chart.setPosition(anchor ? anchor[1] + anchor[2] : "H2");
+        chart.width = Math.min(Math.max(Number(ch.width) || 480, 240), 900);
+        chart.height = Math.min(Math.max(Number(ch.height) || 288, 160), 600);
+        chart.legend.position = "Bottom";
+        if (!/^(Pie|Doughnut)$/.test(type)) {
+          if (ch.xTitle) { chart.axes.categoryAxis.title.text = String(ch.xTitle); chart.axes.categoryAxis.title.visible = true; }
+          if (ch.yTitle) { chart.axes.valueAxis.title.text = String(ch.yTitle); chart.axes.valueAxis.title.visible = true; }
+        }
+        await context.sync();
+        chartCount++;
+      } catch (e) {
+        chartFails.push(`${name}: chart "${ch.title || type}" could not be created (${e.message})`);
+      }
+    }
+  }
+
+  // 5) notes under the first sheet's content
   const notes = [
     ...(spec.missing || []).map((t) => "Missing input: " + t),
     ...(spec.assumptions || []).map((t) => "Assumption: " + t),
     ...bad.map((t) => "Excel rejected this formula (left as red text): " + t),
+    ...chartFails,
     ...(skipped.length ? ["Skipped invalid references: " + skipped.join(", ")] : [])
   ];
   const first = made[0].ws;
@@ -144,7 +183,7 @@ async function writeSpec(context, spec, placeholderId) {
   first.activate();
   first.getRange("A1").select();
   await context.sync();
-  return { sheets: made.map((x) => x.name), notes, bad, skipped };
+  return { sheets: made.map((x) => x.name), notes, bad, skipped, charts: chartCount };
 }
 
 if (typeof module !== "undefined") module.exports = { writeSpec, sbwFixRefs, sbwSheetName };
