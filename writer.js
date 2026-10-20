@@ -191,8 +191,7 @@ async function writeSpec(context, spec, placeholderId) {
     body.values = notes.map((t) => [String(t)]);
     body.format.font.italic = true; body.format.font.color = "#595959";
   }
-  first.activate();
-  first.getRange("A1").select();
+  // stay on whatever sheet you're on; the new sheets just appear in the tab bar
   await context.sync();
   return { sheets: made.map((x) => x.name), notes, bad, skipped, charts: chartCount, trees: treeSheets };
 }

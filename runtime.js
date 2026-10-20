@@ -56,7 +56,6 @@ async function addPlaceholder() {
     ws.load("id");
     ws.getRange("A1").values = [["Building from screenshot… (sending)"]];
     ws.getRange("A1").format.font.color = "#595959";
-    ws.activate();
     await ctx.sync();
     return ws.id;
   });
