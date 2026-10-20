@@ -23,6 +23,14 @@ Reply with ONLY one JSON object, no prose and no code fences, in this shape:
       ]
     }
   ],
+  "trees": [
+    { "sheet": "Decision Tree", "title": "Pricing decision", "numFmt": "#,##0.##",
+      "root": { "type": "decision", "label": "Week 1 price", "value": "Calc!H4", "branches": [
+        { "label": "FP", "best": true, "node": { "type": "chance", "label": "W1 demand", "value": "Calc!H6", "branches": [
+          { "label": "High, sell 80", "prob": "Inputs!B3", "node": { "type": "end", "label": "Profit", "value": "Calc!F7" } },
+          { "label": "Low, sell 35", "prob": "Inputs!B4", "node": { "type": "end", "label": "Profit", "value": "Calc!F8" } } ] } },
+        { "label": "PP", "node": { "type": "end", "label": "Profit", "value": "Calc!F10" } } ] } }
+  ],
   "assumptions": ["each assumption you made where the instructions were unclear"],
   "missing": ["each input the instructions need but the screenshot does not give"]
 }
@@ -41,6 +49,14 @@ Charts:
 - At most 3 charts per sheet unless the instructions ask for more.
 - Chart ranges point at the formula cells, so charts update with the inputs. Labels are text, values numeric.
 - Place each chart beside the data, starting two columns right of the last used column, never on top of cells you filled; stack multiple charts vertically about 16 rows apart.
+
+Decision trees ("trees", optional, top level; each is drawn on its own new sheet, so don't create that sheet in "sheets"):
+- Draw one when the instructions ask for a decision tree, or the problem is a sequence of decisions and uncertain outcomes (EMV, expected value of decisions, decision analysis, value of information).
+- Node type: "decision" (drawn as a rectangle), "chance" (ellipse) or "end" (payoff text). Node label: short, max ~18 characters (e.g. "W2 demand", "W2 choice 40 left"). End label: what the payoff is, e.g. "Profit".
+- Branch label: short, max ~20 characters, e.g. "High, sell 80" or "FP". Put the probability in "prob", not in the label.
+- "value" and "prob" are references to cells you built in "sheets" (e.g. "Calc!H6" or "'Tree Calc'!C5"), so the tree shows live numbers. Do the whole rollback in the sheets first: payoff of every end node, EMV of every chance node with SUMPRODUCT of probabilities and payoffs, and every decision node with MAX (or MIN for costs) of its branches, plus a cell saying which branch is chosen. Every node except end nodes gets a "value".
+- Mark "best": true on the chosen branch at every decision node, based on the values you calculated.
+- Keep the branch order the same as the instructions (or the source diagram, if the screenshot shows one).
 
 Rules:
 - Follow the layout, labels, order and terminology in the screenshot exactly. If it names specific cells, sheets or column headings, use those.

@@ -162,12 +162,23 @@ async function writeSpec(context, spec, placeholderId) {
     }
   }
 
-  // 5) notes under the first sheet's content
+  // 5) decision trees, each on its own sheet
+  const treeFails = [], treeSheets = [];
+  for (const t of (spec.trees || []).slice(0, 4)) {
+    try {
+      const r = await drawTree(context, t, map, used);
+      if (r.name) treeSheets.push(r.name);
+      treeFails.push(...r.fails);
+    } catch (e) { treeFails.push(`Decision tree "${t && t.title || ""}" could not be drawn (${e.message})`); }
+  }
+
+  // 6) notes under the first sheet's content
   const notes = [
     ...(spec.missing || []).map((t) => "Missing input: " + t),
     ...(spec.assumptions || []).map((t) => "Assumption: " + t),
     ...bad.map((t) => "Excel rejected this formula (left as red text): " + t),
     ...chartFails,
+    ...treeFails,
     ...(skipped.length ? ["Skipped invalid references: " + skipped.join(", ")] : [])
   ];
   const first = made[0].ws;
@@ -183,7 +194,11 @@ async function writeSpec(context, spec, placeholderId) {
   first.activate();
   first.getRange("A1").select();
   await context.sync();
-  return { sheets: made.map((x) => x.name), notes, bad, skipped, charts: chartCount };
+  return { sheets: made.map((x) => x.name), notes, bad, skipped, charts: chartCount, trees: treeSheets };
 }
 
-if (typeof module !== "undefined") module.exports = { writeSpec, sbwFixRefs, sbwSheetName };
+if (typeof module !== "undefined") {
+  module.exports = { writeSpec, sbwFixRefs, sbwSheetName };
+  Object.assign(globalThis, { sbwFixRefs, sbwSheetName });
+  globalThis.drawTree = (...a) => require("./tree.js").drawTree(...a);
+}
