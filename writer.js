@@ -21,7 +21,10 @@ const sbwColLetter = (n) => { let s = ""; while (n > 0) { const m = (n - 1) % 26
 // number shown as text: given format, or whole numbers plain and decimals up to 4 places; text passes through
 function sbwNum(e, fmt) {
   const q = (x) => '"' + String(x).replace(/"/g, '""') + '"';
-  const f = fmt ? q(fmt) : `IF(${e}=INT(${e}),"#,##0","#,##0.####")`;
+  // "#,##0.##"-style formats print "21,195." for whole numbers, so whole numbers drop the decimal part
+  const opt = fmt && /\.#+(?![0#])/.test(fmt) && !/\.0/.test(fmt);
+  const f = !fmt ? `IF(${e}=INT(${e}),"#,##0","#,##0.####")`
+    : opt ? `IF(${e}=INT(${e}),${q(fmt.replace(/\.#+/, ""))},${q(fmt)})` : q(fmt);
   return `IF(ISNUMBER(${e}),TEXT(${e},${f}),${e}&"")`;
 }
 

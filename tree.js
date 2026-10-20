@@ -1,161 +1,164 @@
-// Draws a decision tree on its own sheet: rectangles = decisions, ellipses = chance nodes, arrows = branches.
-// EMVs, probabilities and payoffs are live formulas in cells next to the shapes, linked to the calc sheet.
-/* global sbwFixRefs, sbwSheetName, sbwNum */
+// Decision tree drawn as a picture (squares = decisions, circles = chance, red = best path) and pasted
+// onto its own sheet. Numbers are read from the model when the tree is drawn.
+/* global sbwFixRefs, sbwSheetName, sbwSetFormulas */
 
-const SBT = { leafGap: 4, firstRow: 6, nodeW: 76, nodeH: 42, nodeCol: 84, gapCol: 54, maxLeaves: 48, maxDepth: 8 };
+const SBT = { maxLeaves: 48, maxDepth: 8, colW: 230, leafGap: 66, top: 70, left: 30, boxW: 112, boxH: 54, circR: 32, circX: 12 };
 
-// "=Calc!B3", "Calc!B3", 0.55, "0.55" -> Excel expression (no leading =)
-function sbtExpr(v, map) {
-  if (v === undefined || v === null || v === "") return null;
-  if (typeof v === "number") return String(v);
-  const s = String(v).trim().replace(/^=/, "");
-  if (/^-?\d+(\.\d+)?%?$/.test(s)) return s;
-  return "(" + sbwFixRefs(s, map) + ")";
-}
-const sbtStr = (s) => '"' + String(s).replace(/"/g, '""') + '"';
-
-// lay out: leaves get rows top to bottom; a parent sits at the midpoint of its first and last child
 function sbtLayout(root) {
   const nodes = [];
-  let nextRow = SBT.firstRow, leaves = 0;
+  let leafIdx = 0;
   const walk = (n, depth, parent, branch) => {
     const kids = (n.branches || []).filter((b) => b && b.node);
     const me = { n, depth: Math.min(depth, SBT.maxDepth), parent, branch, kids: [] };
     nodes.push(me);
-    if (!kids.length || depth >= SBT.maxDepth || leaves >= SBT.maxLeaves) {
-      me.leaf = true; me.row = nextRow; nextRow += SBT.leafGap; leaves++;
-    } else {
+    if (!kids.length || depth >= SBT.maxDepth || leafIdx >= SBT.maxLeaves) { me.leaf = true; me.slot = leafIdx++; }
+    else {
       for (const b of kids) me.kids.push(walk(b.node, depth + 1, me, b));
-      me.row = Math.round((me.kids[0].row + me.kids[me.kids.length - 1].row) / 2);
+      me.slot = (me.kids[0].slot + me.kids[me.kids.length - 1].slot) / 2;
     }
     return me;
   };
   walk(root, 0, null, null);
-  return { nodes, lastRow: nextRow, maxDepth: Math.max(...nodes.map((x) => x.depth)) };
+  return { nodes, leaves: leafIdx, maxDepth: Math.max(...nodes.map((x) => x.depth)) };
 }
 
-const sbtNodeCol = (d) => 2 + d * 3;            // B, E, H, K ... (1-based)
+function sbtFmt(v, kind) {
+  if (typeof v === "number" && isFinite(v)) {
+    if (kind === "prob") return v.toLocaleString("en-US", { maximumFractionDigits: 4 });
+    const whole = Math.abs(v - Math.round(v)) < 1e-9;
+    return v.toLocaleString("en-US", { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 });
+  }
+  return v == null ? "" : String(v);
+}
+
+// draws onto a canvas; values: Map(node -> {value, prob}) already resolved to numbers/text
+function sbtRender(canvas, tree, layout, vals) {
+  const { nodes, leaves, maxDepth } = layout;
+  const RED = "#C0262D", INK = "#262626";
+  const W = SBT.left + maxDepth * SBT.colW + 230, H = SBT.top + Math.max(leaves - 1, 0) * SBT.leafGap + 70;
+  const S = 2;
+  canvas.width = W * S; canvas.height = H * S;
+  const g = canvas.getContext("2d");
+  g.scale(S, S);
+  g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+  const font = (px, bold) => `${bold ? "600 " : ""}${px}px -apple-system, "Helvetica Neue", Arial, sans-serif`;
+  const X = (x) => SBT.left + x.depth * SBT.colW + SBT.boxW / 2;
+  const Y = (x) => SBT.top + x.slot * SBT.leafGap;
+  const kind = (x) => x.leaf ? "end" : (String(x.n.type).toLowerCase() === "decision" ? "decision" : "chance");
+  const halfW = (x) => kind(x) === "decision" ? SBT.boxW / 2 : SBT.circR + SBT.circX;
+  const onBest = (x) => !!(x.branch && x.branch.best);
+
+  // branches first, so nodes sit on top of the line ends
+  for (const x of nodes) {
+    if (!x.parent) continue;
+    const p = x.parent, best = onBest(x);
+    const x1 = X(p) + halfW(p), y1 = Y(p);
+    const x2 = x.leaf ? X(x) - SBT.boxW / 2 - 8 : X(x) - halfW(x) - 2, y2 = Y(x);
+    g.strokeStyle = best ? RED : INK; g.fillStyle = best ? RED : INK; g.lineWidth = best ? 2.4 : 1.3;
+    g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
+    const a = Math.atan2(y2 - y1, x2 - x1), L = 11;
+    g.beginPath(); g.moveTo(x2, y2);
+    g.lineTo(x2 - L * Math.cos(a - 0.38), y2 - L * Math.sin(a - 0.38));
+    g.lineTo(x2 - L * Math.cos(a + 0.38), y2 - L * Math.sin(a + 0.38)); g.closePath(); g.fill();
+    // label: "High 0.55" / "sell 80" beside the middle of the arrow, on the side away from the line
+    const v = vals.get(x) || {};
+    const parts = String(x.branch.label || "").split(/,\s*/);
+    const l1 = [parts[0], v.prob !== undefined && v.prob !== "" ? sbtFmt(v.prob, "prob") : ""].filter(Boolean).join(" ");
+    const lines = [l1, ...parts.slice(1)].filter(Boolean);
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, lh = 16;
+    g.font = font(13, best && kind(p) === "decision"); g.fillStyle = best ? RED : INK;
+    if (Math.abs(y2 - y1) < 4) {
+      g.textAlign = "center"; lines.forEach((t, i) => g.fillText(t, mx, my - 8 - (lines.length - 1 - i) * lh));
+    } else if (y2 < y1) {                       // rising arrow: text above the right half, clear of the line
+      const w = Math.max(...lines.map((t) => g.measureText(t).width));
+      const tx = mx - 4, yAt = (xx) => y1 + (y2 - y1) * (xx - x1) / (x2 - x1);
+      const base = Math.min(yAt(tx + w), y1) - 7;
+      g.textAlign = "left"; lines.forEach((t, i) => g.fillText(t, tx, base - (lines.length - 1 - i) * lh));
+    } else {                                    // falling arrow: text below-left
+      g.textAlign = "right"; lines.forEach((t, i) => g.fillText(t, mx - 6, my + 18 + i * lh));
+    }
+  }
+  // nodes
+  for (const x of nodes) {
+    const cx = X(x), cy = Y(x), v = vals.get(x) || {};
+    const red = onBest(x) && !x.leaf;
+    if (x.leaf) {
+      g.font = font(14, true); g.fillStyle = INK; g.textAlign = "left"; g.textBaseline = "middle";
+      const lab = x.n.label ? x.n.label + " = " : "";
+      g.fillText(lab + sbtFmt(v.value), cx - SBT.boxW / 2, cy);
+      g.textBaseline = "alphabetic";
+      continue;
+    }
+    g.lineWidth = red ? 2.6 : 1.5; g.strokeStyle = red ? RED : INK; g.fillStyle = "#fff";
+    g.beginPath();
+    if (kind(x) === "decision") g.rect(cx - SBT.boxW / 2, cy - SBT.boxH / 2, SBT.boxW, SBT.boxH);
+    else g.ellipse(cx, cy, SBT.circR + SBT.circX, SBT.circR, 0, 0, Math.PI * 2);
+    g.fill(); g.stroke();
+    // label inside, wrapped to two lines
+    g.font = font(12.5); g.fillStyle = INK; g.textAlign = "center";
+    const words = String(x.n.label || "").split(/\s+/), max = kind(x) === "decision" ? SBT.boxW - 10 : 2 * SBT.circR;
+    const out = [""];
+    for (const w of words) { const t = (out[out.length - 1] + " " + w).trim(); if (g.measureText(t).width > max && out[out.length - 1]) out.push(w); else out[out.length - 1] = t; }
+    const ls = out.slice(0, 3);
+    ls.forEach((t, i) => g.fillText(t, cx, cy + 4 + (i - (ls.length - 1) / 2) * 15));
+    if (v.value !== undefined && v.value !== "") {
+      g.font = font(13.5, true); g.fillStyle = INK;
+      g.fillText("EMV " + sbtFmt(v.value), cx, cy - (kind(x) === "decision" ? SBT.boxH / 2 : SBT.circR) - 10);
+    }
+  }
+  return { cssW: W, cssH: H };
+}
 
 async function drawTree(context, tree, map, used) {
   const fails = [];
   if (!tree || !tree.root) return { fails: ["Decision tree skipped: no root node."] };
   const sheetName = sbwSheetName(tree.sheet || "Decision Tree", used);
   const ws = context.workbook.worksheets.add(sheetName);
-  const { nodes, lastRow, maxDepth } = sbtLayout(tree.root);
-  const fmtV = tree.numFmt ? String(tree.numFmt) : null;
-
-  // grid: fixed column widths so shapes line up with the label cells
-  ws.getRange("A:A").format.columnWidth = 14;
-  for (let d = 0; d <= maxDepth; d++) {
-    const c = sbtNodeCol(d);
-    ws.getRangeByIndexes(0, c - 1, 1, 1).getEntireColumn().format.columnWidth = SBT.nodeCol;
-    ws.getRangeByIndexes(0, c, 1, 2).getEntireColumn().format.columnWidth = SBT.gapCol;
-  }
+  const layout = sbtLayout(tree.root);
   ws.getRange("A1").values = [[String(tree.title || "Decision tree")]];
   ws.getRange("A1").format.font.bold = true; ws.getRange("A1").format.font.size = 14;
-  ws.getRange("A2").values = [["Rectangle = decision, ellipse = chance. EMVs, probabilities and payoffs are linked to the calculations. Red = best choice when the sheet was built."]];
+  ws.getRange("A2").values = [["Square = decision, circle = chance, red = best path. Numbers are taken from the model when the tree was drawn; the model sheet has the live values."]];
   ws.getRange("A2").format.font.italic = true; ws.getRange("A2").format.font.color = "#595959";
   ws.showGridlines = false;
 
-  // load real cell positions (Excel rounds widths) for every row/column we draw on
-  const colPos = {}, rowPos = {};
-  for (let d = 0; d <= maxDepth; d++) for (const c of [sbtNodeCol(d), sbtNodeCol(d) + 1]) { colPos[c] = ws.getRangeByIndexes(0, c - 1, 1, 1); colPos[c].load("left,width"); }
-  for (let r = 1; r <= lastRow; r++) { rowPos[r] = ws.getRangeByIndexes(r - 1, 0, 1, 1); rowPos[r].load("top,height"); }
+  // evaluate every value/probability through Excel itself, in scratch cells, then clear them
+  const asks = [];
+  for (const x of layout.nodes) {
+    if (x.n.value !== undefined && x.n.value !== null && x.n.value !== "") asks.push({ x, k: "value", e: x.n.value });
+    if (x.branch && x.branch.prob !== undefined && x.branch.prob !== null && x.branch.prob !== "") asks.push({ x, k: "prob", e: x.branch.prob });
+  }
+  const SCR = 200;                                       // column GR: far off to the right
+  asks.forEach((a, i) => {
+    const raw = typeof a.e === "number" ? String(a.e) : String(a.e).trim().replace(/^=/, "");
+    a.f = "=" + sbwFixRefs(raw, map);
+    a.range = () => ws.getRangeByIndexes(i, SCR, 1, 1);
+  });
+  await sbwSetFormulas(context, asks.map((a) => ({ range: a.range, f: a.f, text: "?" })));
+  const loaded = asks.map((a) => { const r = a.range(); r.load("values"); return r; });
   await context.sync();
-  const cx = (c) => colPos[c].left + colPos[c].width / 2;
-  const cy = (r) => rowPos[r].top + rowPos[r].height / 2;
-  const rowAt = (y) => { for (let r = 1; r <= lastRow; r++) if (y < rowPos[r].top + rowPos[r].height) return r; return lastRow; };
+  const vals = new Map();
+  asks.forEach((a, i) => {
+    const v = loaded[i].values[0][0];
+    const o = vals.get(a.x) || {}; o[a.k] = v; vals.set(a.x, o);
+    if (typeof v === "string" && /^#/.test(v)) fails.push(`${sheetName}: "${a.e}" gave ${v}`);
+  });
+  if (asks.length) ws.getRangeByIndexes(0, SCR, asks.length, 1).clear();
 
-  // cells: EMV above each node, payoff at each leaf, branch label above each arrow
-  const formulas = [];
-  const put = (r, c, f, opts = {}) => formulas.push({ r, c, f, ...opts });
-  for (const x of nodes) {
-    const c = sbtNodeCol(x.depth);
-    const val = sbtExpr(x.n.value, map);
-    if (x.leaf) {
-      const label = x.n.label ? x.n.label + " = " : "";
-      if (val) put(x.row, c, `=${sbtStr(label)}&${sbwNum(val, fmtV)}`, { bold: true });
-      else put(x.row, c, null, { text: x.n.label || "" , bold: true });
-    } else if (val) {
-      put(x.row - 2, c, `=${sbtStr("EMV ")}&${sbwNum(val, fmtV)}`, { bold: true, center: true });
-    }
-    if (x.branch) {
-      const p = sbtExpr(x.branch.prob, map);
-      const lbl = String(x.branch.label || "");
-      const gc = sbtNodeCol(x.parent.depth) + 1;
-      // arrow end points (same maths as the shapes below)
-      const x1 = cx(gc - 1) + SBT.nodeW / 2, y1 = cy(x.parent.row);
-      const x2 = x.leaf ? colPos[sbtNodeCol(x.depth)].left + 2 : cx(sbtNodeCol(x.depth)) - SBT.nodeW / 2, y2 = cy(x.row);
-      const yAt = (xx) => y1 + (y2 - y1) * Math.min(1, Math.max(0, (xx - x1) / Math.max(1, x2 - x1)));
-      const xm = colPos[gc].left + colPos[gc].width;            // label is centred on the two gap columns
-      const hw = (lbl.length + (p ? 5 : 0)) * 2.9 + 4;
-      const ya = yAt(xm - hw), yb = yAt(xm + hw);
-      // upward or flat arrow: label above the line; downward arrow: label below it
-      const r = y2 <= y1 ? rowAt(Math.min(ya, yb)) - 1 : rowAt(Math.max(ya, yb)) + 1;
-      const f = p ? `=${sbtStr(lbl + (lbl ? " " : ""))}&TEXT(${p},"0.0##")` : null;
-      put(Math.max(r, 3), gc, f, { text: lbl, red: !!x.branch.best, span: 2 });
-    }
-  }
-  const cellOf = (x) => ws.getRangeByIndexes(x.r - 1, x.c - 1, 1, 1);
-  const taken = new Set();
-  for (const x of formulas) {
-    const cell = cellOf(x);
-    if (x.span) {                                  // branch label: merge the two gap cells and centre it
-      const k = x.r + ":" + x.c;
-      if (!taken.has(k)) { taken.add(k); ws.getRangeByIndexes(x.r - 1, x.c - 1, 1, x.span).merge(false); }
-      cell.format.horizontalAlignment = "Center";
-      cell.format.font.size = 10;
-    }
-    if (x.f) cell.formulas = [[x.f]]; else cell.values = [[x.text]];
-    if (x.bold) cell.format.font.bold = true;
-    if (x.red) cell.format.font.color = "#C00000";
-    if (x.center) cell.format.horizontalAlignment = "Center";
-  }
+  // draw and paste the picture
+  const canvas = document.createElement("canvas");
+  const { cssW } = sbtRender(canvas, tree, layout, vals);
+  const b64 = canvas.toDataURL("image/png").split(",")[1];
+  const anchor = ws.getRange("A4");
+  anchor.load("left,top");
+  await context.sync();
+  const img = ws.shapes.addImage(b64);
+  img.lockAspectRatio = true;
+  img.left = anchor.left; img.top = anchor.top;
+  img.width = cssW * 0.75;                              // CSS px -> points, drawn at 2x for sharpness
+  img.name = "Decision tree";
   try { await context.sync(); }
-  catch {
-    for (const x of formulas) {
-      if (!x.f) continue;
-      try { cellOf(x).formulas = [[x.f]]; await context.sync(); }
-      catch { cellOf(x).values = [[x.text || "(check formula)"]]; await context.sync(); fails.push(`${sheetName}: could not link "${x.f}"`); }
-    }
-  }
-
-  // shapes
-  const red = new Set(nodes.filter((x) => x.branch && x.branch.best).map((x) => x));
-  const box = (x) => {
-    const c = sbtNodeCol(x.depth);
-    return { l: cx(c) - SBT.nodeW / 2, t: cy(x.row) - SBT.nodeH / 2, r: cx(c) + SBT.nodeW / 2, mid: cy(x.row) };
-  };
-  for (const x of nodes) {
-    if (x.leaf) continue;
-    const b = box(x);
-    const kind = String(x.n.type || "").toLowerCase() === "decision" ? "Rectangle" : "Ellipse";
-    const s = ws.shapes.addGeometricShape(kind);
-    s.left = b.l; s.top = b.t; s.width = SBT.nodeW; s.height = SBT.nodeH;
-    s.fill.setSolidColor("#FFFFFF");
-    s.lineFormat.color = red.has(x) ? "#C00000" : "#404040";
-    s.lineFormat.weight = red.has(x) ? 2 : 1.25;
-    s.textFrame.textRange.text = String(x.n.label || "").slice(0, 40);
-    s.textFrame.textRange.font.size = 10;
-    s.textFrame.textRange.font.color = "#1A1A1A";
-    s.textFrame.horizontalAlignment = "Center";
-    s.textFrame.verticalAlignment = "Middle";
-    s.name = "SB tree node " + nodes.indexOf(x);
-  }
-  for (const x of nodes) {
-    if (!x.parent) continue;
-    const pb = box(x.parent);
-    const c = sbtNodeCol(x.depth);
-    const endX = x.leaf ? colPos[c].left + 2 : box(x).l;
-    const ln = ws.shapes.addLine(pb.r, pb.mid, endX, cy(x.row), "Straight");
-    const best = !!(x.branch && x.branch.best);
-    ln.lineFormat.color = best ? "#C00000" : "#404040";
-    ln.lineFormat.weight = best ? 2 : 1;
-    ln.line.endArrowheadStyle = "Triangle";
-  }
-  try { await context.sync(); }
-  catch (e) { fails.push(`${sheetName}: some tree shapes could not be drawn (${e.message})`); }
+  catch (e) { fails.push(`${sheetName}: the tree picture could not be inserted (${e.message})`); }
   return { name: sheetName, fails };
 }
 
-if (typeof module !== "undefined") module.exports = { drawTree, sbtLayout, sbtExpr };
+if (typeof module !== "undefined") module.exports = { drawTree, sbtLayout, sbtRender };

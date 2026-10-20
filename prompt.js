@@ -37,6 +37,10 @@ Reply with ONLY one JSON object, no prose and no code fences, in this shape:
         { "kind": "working", "text": "P(A ∩ R) = 210 / 1,000 = {Calc!C5|0.0000}" },
         { "kind": "answer", "text": "P(A ∩ R) = {Calc!C5|0.0000}" } ] },
       { "label": "a.i)", "lines": [
+        { "kind": "working", "text": "X ~ N(3.2, 0.45²)" },
+        { "kind": "working", "text": "P(X > 4.0) = 1 − P(X ≤ 4.0)" },
+        { "kind": "working", "text": "z = (4.0 − 3.2) / 0.45" },
+        { "kind": "working", "text": "  = {Calc!C8|0.0000}" },
         { "kind": "excel", "text": "Excel: =1-NORM.DIST(4,3.2,0.45,TRUE)" },
         { "kind": "answer", "text": "P(X > 4.0) ≈ {Calc!C9|0.0000} ({Calc!C9|0.00%})" } ] },
       { "label": "b)", "lines": [
@@ -74,7 +78,14 @@ Decision trees ("trees", optional, top level; each is drawn on its own new sheet
 
 Answers ("answers", top level; written to an "Answers" sheet laid out like a model solution):
 - Whenever the screenshot contains questions or parts to answer (a), b), i), ii) ...), give one part per sub-question, in order, labelled as in the question ("a)", "a.i)", "c.ii)"). Title "Question N" and marks as shown.
-- Each part reads like a model solution: the formula or setup, the values substituted, the result; then ONE "answer" line with the final result, units and the rounding asked for; then a "note" line for any interpretation, explanation, comparison or decision the question asks for ("interpret", "explain", "are they independent", "which option", "state the strategy").
+- The user copies the answers by hand onto paper, so write each part exactly as it should be written down, ONE logical step per line, in this order:
+  1. what is being found, or the distribution / definition used (e.g. "X ~ Binomial(n = 60, p = 0.06)", "Let p = P(high attendance)")
+  2. the formula in symbols (e.g. "P(X ≥ 5) = 1 − P(X ≤ 4)", "EMV(A) = p(24) + (1 − p)(9)")
+  3. the numbers substituted
+  4. the result
+  then an "excel" line if relevant, then ONE "answer" line with the final result, units and the rounding asked for, then "note" lines for any interpretation, explanation, comparison or decision the question asks for ("interpret", "explain", "are they independent", "which option", "state the strategy").
+- Keep every line short enough to write on one line of paper (about 60 characters). Break long working at an equals sign so the next line starts with "  = ...". Each sentence of an explanation is its own "note" line.
+- Don't repeat the same number on several lines; each line moves the working forward.
 - Every calculated number in a line is a placeholder {Sheet!Cell} or {Sheet!Cell|numFmt} pointing at the model cell that calculates it, never typed, so answers update with the model. Numbers given in the question may be typed. Text results (e.g. a chosen option) can be placeholders too.
 - When the question allows or asks for Excel functions, add an "excel" line with the exact function and arguments, e.g. "Excel: =1-BINOM.DIST(4,60,0.06,TRUE)", and make the model cell use that same function.
 - For a part answered by a drawing (decision tree, chart), point to it ("See sheet 'Decision Tree'.") and still give the key numbers and the decision in answer/note lines.
