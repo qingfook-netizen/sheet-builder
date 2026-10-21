@@ -11,13 +11,26 @@ function getSettings() {
 }
 const saveSettings = (o) => localStorage.setItem("sb-settings", JSON.stringify({ ...getSettings(), ...o }));
 
-// small popup for messages (Excel has no toast API for add-ins)
-function popup(text) {
-  Office.context.ui.displayDialogAsync(BASE + "message.html#" + encodeURIComponent(text), { height: 30, width: 30, displayInIframe: true }, (r) => {
-    if (r.status !== Office.AsyncResultStatus.Succeeded) return;
-    const d = r.value;
-    d.addEventHandler(Office.EventType.DialogMessageReceived, () => d.close());
-  });
+// Messages and Settings show in the add-in's side pane (Excel on Mac ignores pop-up window sizes).
+function popup(text, ok) {
+  const box = document.getElementById("msgbox");
+  if (box) { box.textContent = text; box.className = ok ? "ok" : ""; box.style.display = "block"; }
+  try { Office.addin.showAsTaskpane(); } catch {}
+}
+
+function initPane() {
+  const $ = (id) => document.getElementById(id);
+  if (!$("k")) return;
+  const o = getSettings();
+  $("k").value = o.apiKey; $("m").value = o.model; $("n").value = o.standing;
+  $("save").onclick = () => {
+    const apiKey = $("k").value.trim();
+    if (apiKey && !apiKey.startsWith("sk-or-")) { $("saved").textContent = "Key must start with sk-or-"; return; }
+    saveSettings({ apiKey, model: $("m").value.trim() || DEFAULTS.model, standing: $("n").value.trim() });
+    $("saved").textContent = "Saved";
+    setTimeout(() => ($("saved").textContent = ""), 2500);
+  };
+  $("close").onclick = () => { $("msgbox").style.display = "none"; try { Office.addin.hide(); } catch {} };
 }
 
 function parseSpec(text) {
@@ -141,7 +154,7 @@ async function run({ rebuild }) {
     if (pic) await Excel.run(async (ctx) => { ctx.workbook.worksheets.getItem(pic.sheetId).shapes.getItem(pic.shapeId).delete(); await ctx.sync(); }).catch(() => {});
   } catch (e) {
     if (sheetId) await status(sheetId, "Error: " + e.message + "  (nothing was removed; delete this sheet and try again)");
-    else popup("Error: " + e.message);
+    popup("Error: " + e.message);
   } finally {
     busy = false;
   }
@@ -152,17 +165,11 @@ function rebuildFromBank(event) { event?.completed?.(); return run({ rebuild: tr
 
 function openSettings(event) {
   event?.completed?.();
-  Office.context.ui.displayDialogAsync(BASE + "settings.html", { height: 55, width: 35, displayInIframe: true }, (r) => {
-    if (r.status !== Office.AsyncResultStatus.Succeeded) return;
-    const d = r.value;
-    d.addEventHandler(Office.EventType.DialogMessageReceived, (arg) => {
-      try { const o = JSON.parse(arg.message); if (o && o.save) saveSettings(o.save); } catch {}
-      d.close();
-    });
-  });
+  try { Office.addin.showAsTaskpane(); } catch {}
 }
 
 Office.onReady(() => {
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initPane); else initPane();
   Office.actions.associate("buildFromImage", buildFromImage);
   Office.actions.associate("rebuildFromBank", rebuildFromBank);
   Office.actions.associate("openSettings", openSettings);

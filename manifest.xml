@@ -5,7 +5,7 @@
            xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
            xsi:type="TaskPaneApp">
   <Id>e4b34fa8-9117-4237-bd63-ee8c6ed68e83</Id>
-  <Version>1.1.0.0</Version>
+  <Version>1.2.0.0</Version>
   <ProviderName>Zane Lau</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="Sheet Builder"/>
@@ -92,8 +92,9 @@
                     <bt:Image size="32" resid="Icon.32"/>
                     <bt:Image size="80" resid="Icon.80"/>
                   </Icon>
-                  <Action xsi:type="ExecuteFunction">
-                    <FunctionName>openSettings</FunctionName>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>SB.Pane</TaskpaneId>
+                    <SourceLocation resid="Runtime.Url"/>
                   </Action>
                 </Control>
               </Group>
