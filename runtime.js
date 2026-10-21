@@ -135,7 +135,7 @@ async function run({ rebuild }) {
     const spec = parseSpec(reply);
     const res = await Excel.run((ctx) => writeSpec(ctx, spec, sheetId));
     const when = new Date().toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-    const label = `${rebuild ? "Rebuild" : "Build"} · ${when} · ${[res.answers, ...res.sheets, ...(res.trees || [])].filter(Boolean).join(", ")}`;
+    const label = `${rebuild ? "Rebuild" : "Build"} · ${when} · ${[res.answers, res.suggested, ...res.sheets, ...(res.trees || [])].filter(Boolean).join(", ")}`;
     await Excel.run((ctx) => writeBank(ctx, spec, pic && pic.base64, label));
     // the screenshot now lives in the Instruction Bank; remove the pasted copy
     if (pic) await Excel.run(async (ctx) => { ctx.workbook.worksheets.getItem(pic.sheetId).shapes.getItem(pic.shapeId).delete(); await ctx.sync(); }).catch(() => {});

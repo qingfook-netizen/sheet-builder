@@ -190,12 +190,16 @@ async function writeSpec(context, spec, placeholderId) {
   }
 
   // 6) answers sheet, placed in front of the model sheets
-  let answersSheet = null;
+  let answersSheet = null, suggestedSheet = null;
   if (Array.isArray(spec.answers) && spec.answers.length) {
     try {
       const a = await writeAnswers(context, spec.answers, map, used, phPos);
       answersSheet = a.name; treeFails.push(...a.fails);
     } catch (e) { treeFails.push("Answers sheet could not be written (" + e.message + ")"); }
+    try {
+      const sg = await writeSuggested(context, spec.answers, map, used, phPos != null ? phPos + 1 : null);
+      suggestedSheet = sg.name; treeFails.push(...sg.fails);
+    } catch (e) { treeFails.push("Suggested Answer sheet could not be written (" + e.message + ")"); }
   }
 
   // 7) notes under the first sheet's content
@@ -219,7 +223,7 @@ async function writeSpec(context, spec, placeholderId) {
   }
   // stay on whatever sheet you're on; the new sheets just appear in the tab bar
   await context.sync();
-  return { sheets: made.map((x) => x.name), notes, bad, skipped, charts: chartCount, trees: treeSheets, answers: answersSheet };
+  return { sheets: made.map((x) => x.name), notes, bad, skipped, charts: chartCount, trees: treeSheets, answers: answersSheet, suggested: suggestedSheet };
 }
 
 if (typeof module !== "undefined") {
@@ -227,4 +231,5 @@ if (typeof module !== "undefined") {
   Object.assign(globalThis, { sbwFixRefs, sbwSheetName, sbwNum, sbwSetFormulas, sbwColLetter });
   globalThis.drawTree = (...a) => require("./tree.js").drawTree(...a);
   globalThis.writeAnswers = (...a) => require("./answers.js").writeAnswers(...a);
+  globalThis.writeSuggested = (...a) => require("./answers.js").writeSuggested(...a);
 }

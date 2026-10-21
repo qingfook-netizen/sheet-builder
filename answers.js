@@ -76,4 +76,37 @@ async function writeAnswers(context, answers, map, used, position) {
   return { name: ws.name, fails: fails.map((t) => "Answers: could not link " + t) };
 }
 
-if (typeof module !== "undefined") module.exports = { writeAnswers, sbaLineFormula };
+// "Suggested Answer": the same answers as one plain column, ready to copy onto paper
+async function writeSuggested(context, answers, map, used, position) {
+  const ws = context.workbook.worksheets.add(sbwSheetName("Suggested Answer", used));
+  ws.load("name");
+  if (position != null) ws.position = position;
+  ws.getRange("A:A").format.columnWidth = 560;
+  const items = [];
+  let r = 1;
+  const row = (opts) => {
+    const at = r++;
+    const c = ws.getRange("A" + at);
+    c.format.font.size = 14; c.format.font.color = "#000000";
+    if (opts.bold) c.format.font.bold = true;
+    if (opts.fill) {
+      c.format.fill.color = opts.fill;
+      ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"].forEach((e) => { const b = c.format.borders.getItem(e); b.style = "Continuous"; b.color = "#A6A6A6"; });
+    }
+    if (opts.text != null) items.push({ range: () => ws.getRange("A" + at), f: sbaLineFormula(opts.text, map), text: opts.text });
+  };
+  answers.forEach((q, qi) => {
+    if (qi) { r++; }
+    row({ text: q.heading || [q.title, q.marks].filter(Boolean).join("  "), bold: true, fill: "#EDEDED" });
+    for (const p of q.parts || []) {
+      row({ text: String(p.label || ""), bold: true });
+      for (const ln of p.lines || []) row({ text: String(ln.text || ""), bold: ln.kind === "answer" });
+      r++;
+    }
+  });
+  await context.sync();
+  const fails = await sbwSetFormulas(context, items);
+  return { name: ws.name, fails: fails.map((t) => "Suggested Answer: could not link " + t) };
+}
+
+if (typeof module !== "undefined") module.exports = { writeAnswers, writeSuggested, sbaLineFormula };

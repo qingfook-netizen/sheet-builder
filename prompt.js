@@ -32,7 +32,7 @@ Reply with ONLY one JSON object, no prose and no code fences, in this shape:
         { "label": "PP", "node": { "type": "end", "label": "Profit", "value": "Calc!F10" } } ] } }
   ],
   "answers": [
-    { "title": "Question 1", "marks": "[10 marks]", "parts": [
+    { "title": "Question 1", "marks": "[10 marks]", "heading": "Q1 Subscription renewals – conditional probability", "parts": [
       { "label": "a)", "lines": [
         { "kind": "working", "text": "P(A ∩ R) = 210 / 1,000 = {Calc!C5|0.0000}" },
         { "kind": "answer", "text": "P(A ∩ R) = {Calc!C5|0.0000}" } ] },
@@ -84,6 +84,8 @@ Answers ("answers", top level; written to an "Answers" sheet laid out like a mod
   3. the numbers substituted
   4. the result
   then an "excel" line if relevant, then ONE "answer" line with the final result, units and the rounding asked for, then "note" lines for any interpretation, explanation, comparison or decision the question asks for ("interpret", "explain", "are they independent", "which option", "state the strategy").
+- "heading": one line naming the question, its topic and the method, e.g. "Q1 Bank waiting time – one-sample t-test (left-tailed)".
+- For a test or method, the first lines of the first part state it: the question being answered, the test or model and why (e.g. "σ unknown → t-test, df = n − 1"), hypotheses H₀ / H₁, and α.
 - Keep every line short enough to write on one line of paper (about 60 characters). Break long working at an equals sign so the next line starts with "  = ...". Each sentence of an explanation is its own "note" line.
 - Don't repeat the same number on several lines; each line moves the working forward.
 - Every calculated number in a line is a placeholder {Sheet!Cell} or {Sheet!Cell|numFmt} pointing at the model cell that calculates it, never typed, so answers update with the model. Numbers given in the question may be typed. Text results (e.g. a chosen option) can be placeholders too.
