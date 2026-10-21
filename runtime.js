@@ -44,24 +44,6 @@ async function grabPicture() {
   });
 }
 
-// Excel on Mac can jump to a sheet when it is added or a picture is pasted on it.
-// Remember where you are (sheet + selected cells) and put you back after each write.
-const rememberView = () => Excel.run(async (ctx) => {
-  const ws = ctx.workbook.worksheets.getActiveWorksheet();
-  ws.load("id");
-  await ctx.sync();
-  let address = null;
-  try { const sel = ctx.workbook.getSelectedRange(); sel.load("address"); await ctx.sync(); address = sel.address.split("!").pop(); } catch {}
-  return { id: ws.id, address };
-}).catch(() => null);
-
-const restoreView = (v) => v ? Excel.run(async (ctx) => {
-  const ws = ctx.workbook.worksheets.getItem(v.id);
-  ws.activate();
-  if (v.address) ws.getRange(v.address).select();
-  await ctx.sync();
-}).catch(() => {}) : Promise.resolve();
-
 async function addPlaceholder() {
   return Excel.run(async (ctx) => {
     const sheets = ctx.workbook.worksheets;
@@ -145,24 +127,18 @@ async function run({ rebuild }) {
       return;
     }
     if (rebuild && !bank) { popup("There's no Instruction Bank sheet in this workbook yet. Build from a screenshot first."); return; }
-    let view = await rememberView();
     sheetId = await addPlaceholder();
-    await restoreView(view);
     const what = rebuild ? "Rebuilding from the Instruction Bank…" : "Building from screenshot…";
     await status(sheetId, what + " (sending)");
     const reply = await callModel({ pic, bank, rebuild }, (n) => status(sheetId, `${what} ${n.toLocaleString()} characters received`));
     await status(sheetId, "Writing the sheets…");
     const spec = parseSpec(reply);
-    view = await rememberView();                 // you may have moved while it was thinking
     const res = await Excel.run((ctx) => writeSpec(ctx, spec, sheetId));
-    await restoreView(view);
     const when = new Date().toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
     const label = `${rebuild ? "Rebuild" : "Build"} · ${when} · ${[res.answers, res.suggested, ...res.sheets, ...(res.trees || [])].filter(Boolean).join(", ")}`;
     await Excel.run((ctx) => writeBank(ctx, spec, pic && pic.base64, label));
-    await restoreView(view);
     // the screenshot now lives in the Instruction Bank; remove the pasted copy
     if (pic) await Excel.run(async (ctx) => { ctx.workbook.worksheets.getItem(pic.sheetId).shapes.getItem(pic.shapeId).delete(); await ctx.sync(); }).catch(() => {});
-    await restoreView(view);
   } catch (e) {
     if (sheetId) await status(sheetId, "Error: " + e.message + "  (nothing was removed; delete this sheet and try again)");
     else popup("Error: " + e.message);
